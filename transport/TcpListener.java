@@ -1,7 +1,6 @@
 package transport;
 
 import concurrency.WorkerPool;
-
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -24,7 +23,7 @@ public final class TcpListener implements Runnable {
             while (running) {
                 Socket socket = serverSocket.accept();
 
-                boolean accepted = workerPool.submit(() -> handle(socket));
+                boolean accepted = workerPool.submit(new ConnectionHandler(socket));
 
                 if (!accepted) {
                     closeQuietly(socket);
@@ -34,12 +33,6 @@ public final class TcpListener implements Runnable {
         } catch (IOException e) {
             throw new RuntimeException("TCP listener failed", e);
         }
-    }
-
-    private void handle(Socket socket) {
-        // TEMP handler (Day 3 only)
-        // Proves lifecycle correctness
-        closeQuietly(socket);
     }
 
     private void closeQuietly(Socket socket) {

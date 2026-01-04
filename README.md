@@ -26,3 +26,10 @@ ConnectionHandler (later)
 
 ### ServerConfig.java
 - immutable startup configuration
+
+### connectionHandler.java
+- Configure socket (timeouts)
+- Read bytes into a buffer
+- Detect end-of-stream or timeout
+- Print bytes (temporary)
+- Close socket in finally
