@@ -5,14 +5,16 @@ import java.util.Map;
 
 public final class HttpParser {
 
-    public static HttpRequest parse(String raw) {
-        String[] lines = raw.split("\r\n");
+    public static HttpRequest parse(
+            String headersPart,
+            byte[] body
+    ) {
+        String[] lines = headersPart.split("\r\n");
 
         if (lines.length == 0) {
             throw new IllegalArgumentException("Empty request");
         }
 
-        // ---- Start line ----
         String[] start = lines[0].split(" ");
         if (start.length != 3) {
             throw new IllegalArgumentException("Invalid start line");
@@ -22,7 +24,6 @@ public final class HttpParser {
         String path = start[1];
         String version = start[2];
 
-        // ---- Headers ----
         Map<String, String> headers = new HashMap<>();
 
         for (int i = 1; i < lines.length; i++) {
@@ -34,11 +35,12 @@ public final class HttpParser {
                 throw new IllegalArgumentException("Malformed header: " + line);
             }
 
-            String key = line.substring(0, idx).trim();
-            String value = line.substring(idx + 1).trim();
-            headers.put(key, value);
+            headers.put(
+                    line.substring(0, idx).trim(),
+                    line.substring(idx + 1).trim()
+            );
         }
 
-        return new HttpRequest(method, path, version, headers);
+        return new HttpRequest(method, path, version, headers, body);
     }
 }

@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.Map;
 
 public final class ConnectionHandler implements Runnable {
 
@@ -27,27 +28,63 @@ public final class ConnectionHandler implements Runnable {
             InputStream in = socket.getInputStream();
             OutputStream out = socket.getOutputStream();
 
-            StringBuilder raw = new StringBuilder();
+            // ---- 1. Read headers ----
+            StringBuilder headers = new StringBuilder();
             byte[] buffer = new byte[BUFFER_SIZE];
 
             int read;
             while ((read = in.read(buffer)) != -1) {
-                raw.append(new String(buffer, 0, read));
-
-                // HTTP header terminator
-                if (raw.indexOf("\r\n\r\n") != -1) {
+                headers.append(new String(buffer, 0, read));
+                if (headers.indexOf("\r\n\r\n") != -1) {
                     break;
                 }
             }
 
-            HttpRequest request = HttpParser.parse(raw.toString());
+            int headerEnd = headers.indexOf("\r\n\r\n");
+            if (headerEnd == -1) {
+                throw new IllegalArgumentException("Invalid HTTP request");
+            }
 
-            // TEMP: log parsed request
+            String headerPart = headers.substring(0, headerEnd);
+
+            // ---- 2. Parse headers first ----
+            HttpRequest temp =
+                    HttpParser.parse(headerPart, new byte[0]);
+
+            // ---- 3. Read body if Content-Length exists ----
+            int contentLength = 0;
+            Map<String, String> h = temp.headers;
+
+            if (h.containsKey("Content-Length")) {
+                contentLength = Integer.parseInt(h.get("Content-Length"));
+                if (contentLength < 0 || contentLength > 1_000_000) {
+                    throw new IllegalArgumentException("Invalid Content-Length");
+                }
+            }
+
+            byte[] body = new byte[contentLength];
+            int totalRead = 0;
+
+            while (totalRead < contentLength) {
+                int r = in.read(body, totalRead, contentLength - totalRead);
+                if (r == -1) break;
+                totalRead += r;
+            }
+
+            if (totalRead != contentLength) {
+                throw new IllegalArgumentException("Body truncated");
+            }
+
+            HttpRequest request =
+                    HttpParser.parse(headerPart, body);
+
+            // ---- TEMP LOG ----
             System.out.println(
-                    request.method + " " + request.path + " " + request.version
+                    request.method + " " + request.path +
+                    " bodyBytes=" + request.body.length
             );
 
-            // Minimal valid HTTP response
+            // ---- Response ----
             String response =
                     "HTTP/1.1 200 OK\r\n" +
                     "Content-Length: 2\r\n" +
@@ -59,9 +96,9 @@ public final class ConnectionHandler implements Runnable {
             out.flush();
 
         } catch (SocketTimeoutException e) {
-            // slow client, drop
+            // slow client
         } catch (Exception e) {
-            // malformed request or IO error
+            // malformed or IO error
         } finally {
             closeQuietly();
         }
