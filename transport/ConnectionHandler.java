@@ -24,11 +24,13 @@ public final class ConnectionHandler implements Runnable {
 
     @Override
     public void run() {
+        OutputStream out = null;
+
         try {
             socket.setSoTimeout(READ_TIMEOUT_MS);
 
             InputStream in = socket.getInputStream();
-            OutputStream out = socket.getOutputStream();
+            out = socket.getOutputStream();
 
             // ---- 1. Read until headers complete ----
             StringBuilder raw = new StringBuilder();
@@ -44,7 +46,7 @@ public final class ConnectionHandler implements Runnable {
 
             int headerEnd = raw.indexOf("\r\n\r\n");
             if (headerEnd == -1) {
-                throw new IllegalArgumentException("Invalid HTTP request");
+                throw new BadRequestException("Invalid HTTP request");
             }
 
             int bodyStart = headerEnd + 4;
@@ -63,11 +65,11 @@ public final class ConnectionHandler implements Runnable {
             if (h.containsKey("content-length")) {
                 contentLength = Integer.parseInt(h.get("content-length"));
                 if (contentLength < 0 || contentLength > 1_000_000) {
-                    throw new IllegalArgumentException("Invalid Content-Length");
+                    throw new BadRequestException("Invalid Content-Length");
                 }
             }
 
-            // ---- 4. Read body correctly ----
+            // ---- 4. Read body ----
             byte[] body = new byte[contentLength];
 
             int copied = Math.min(leftover.length, contentLength);
@@ -81,7 +83,7 @@ public final class ConnectionHandler implements Runnable {
             }
 
             if (totalRead != contentLength) {
-                throw new IllegalArgumentException("Body truncated");
+                throw new BadRequestException("Body truncated");
             }
 
             HttpRequest request = HttpParser.parse(headerPart, body);
@@ -100,14 +102,27 @@ public final class ConnectionHandler implements Runnable {
             // ---- 6. Write response ----
             HttpWriter.write(out, response);
 
+        } catch (BadRequestException e) {
+            safeWrite(out, new HttpResponse(400, "Bad Request", null));
+
         } catch (SocketTimeoutException e) {
-            System.err.println("Socket read timeout");
-            e.printStackTrace();
+            // acceptable silent close
+
         } catch (Exception e) {
-            System.err.println("Error handling connection: " + e.getMessage());
             e.printStackTrace();
+            safeWrite(out, new HttpResponse(500, "Internal Server Error", null));
+
         } finally {
             closeQuietly();
+        }
+    }
+
+    private void safeWrite(OutputStream out, HttpResponse response) {
+        if (out == null) return;
+        try {
+            HttpWriter.write(out, response);
+        } catch (Exception ignored) {
+            // last resort
         }
     }
 
