@@ -22,7 +22,7 @@ ConnectionHandler (later)
 ### TcpListener.java
 - Bind to a port
 - Accept incoming TCP connections
-- Hand sockets to the 
+- Hand sockets and routes
 
 ### ServerConfig.java
 - immutable startup configuration
@@ -31,5 +31,35 @@ ConnectionHandler (later)
 - Configure socket (timeouts)
 - Read bytes into a buffer
 - Detect end-of-stream or timeout
-- Print bytes (temporary)
-- Close socket in finally
+- reads exact content-length
+- Parses HttpRequest
+- Routes request via Router
+- Writes response via HttpWriter
+
+read → parse → route → execute → write → close
+
+### HttpParser.java
+- Accepts the headers and body
+- //s+ correct start-line parsing 
+- headers are normalised
+
+### HttpRequest.java
+- creates an proper request block
+
+
+TCP → ConnectionHandler → HttpParser → Router → HttpHandler → HttpWriter
+
+### Router.java
+- maps the HTTP_METHOD to HttpHandler
+- Read-only at runtime
+
+### HttpHandler.java
+- handles the request & response
+
+### HttpResponse.java
+- prevents handlers from writing raw HTTP
+-  Keeps protocols serialization
+- Avoids duplicate response logics
+
+### HttpWriter.java
+- ensures the protocol is correct 

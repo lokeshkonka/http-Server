@@ -15,7 +15,7 @@ public final class HttpParser {
             throw new IllegalArgumentException("Empty request");
         }
 
-        String[] start = lines[0].split(" ");
+        String[] start = lines[0].split("\\s+");
         if (start.length != 3) {
             throw new IllegalArgumentException("Invalid start line");
         }
@@ -36,7 +36,7 @@ public final class HttpParser {
             }
 
             headers.put(
-                    line.substring(0, idx).trim(),
+                    line.substring(0, idx).trim().toLowerCase(),
                     line.substring(idx + 1).trim()
             );
         }

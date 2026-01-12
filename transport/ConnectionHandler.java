@@ -1,12 +1,12 @@
 package transport;
 
-import http.HttpParser;
-import http.HttpRequest;
+import http.*;
 
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 public final class ConnectionHandler implements Runnable {
@@ -15,9 +15,11 @@ public final class ConnectionHandler implements Runnable {
     private static final int BUFFER_SIZE = 1024;
 
     private final Socket socket;
+    private final Router router;
 
-    public ConnectionHandler(Socket socket) {
+    public ConnectionHandler(Socket socket, Router router) {
         this.socket = socket;
+        this.router = router;
     }
 
     @Override
@@ -28,43 +30,50 @@ public final class ConnectionHandler implements Runnable {
             InputStream in = socket.getInputStream();
             OutputStream out = socket.getOutputStream();
 
-            // ---- 1. Read headers ----
-            StringBuilder headers = new StringBuilder();
+            // ---- 1. Read until headers complete ----
+            StringBuilder raw = new StringBuilder();
             byte[] buffer = new byte[BUFFER_SIZE];
 
             int read;
             while ((read = in.read(buffer)) != -1) {
-                headers.append(new String(buffer, 0, read));
-                if (headers.indexOf("\r\n\r\n") != -1) {
+                raw.append(new String(buffer, 0, read, StandardCharsets.ISO_8859_1));
+                if (raw.indexOf("\r\n\r\n") != -1) {
                     break;
                 }
             }
 
-            int headerEnd = headers.indexOf("\r\n\r\n");
+            int headerEnd = raw.indexOf("\r\n\r\n");
             if (headerEnd == -1) {
                 throw new IllegalArgumentException("Invalid HTTP request");
             }
 
-            String headerPart = headers.substring(0, headerEnd);
+            int bodyStart = headerEnd + 4;
 
-            // ---- 2. Parse headers first ----
-            HttpRequest temp =
-                    HttpParser.parse(headerPart, new byte[0]);
+            String headerPart = raw.substring(0, headerEnd);
+            byte[] leftover =
+                    raw.substring(bodyStart).getBytes(StandardCharsets.ISO_8859_1);
 
-            // ---- 3. Read body if Content-Length exists ----
+            // ---- 2. Parse headers ----
+            HttpRequest temp = HttpParser.parse(headerPart, new byte[0]);
+
+            // ---- 3. Determine Content-Length ----
             int contentLength = 0;
             Map<String, String> h = temp.headers;
 
-            if (h.containsKey("Content-Length")) {
-                contentLength = Integer.parseInt(h.get("Content-Length"));
+            if (h.containsKey("content-length")) {
+                contentLength = Integer.parseInt(h.get("content-length"));
                 if (contentLength < 0 || contentLength > 1_000_000) {
                     throw new IllegalArgumentException("Invalid Content-Length");
                 }
             }
 
+            // ---- 4. Read body correctly ----
             byte[] body = new byte[contentLength];
-            int totalRead = 0;
 
+            int copied = Math.min(leftover.length, contentLength);
+            System.arraycopy(leftover, 0, body, 0, copied);
+
+            int totalRead = copied;
             while (totalRead < contentLength) {
                 int r = in.read(body, totalRead, contentLength - totalRead);
                 if (r == -1) break;
@@ -75,30 +84,28 @@ public final class ConnectionHandler implements Runnable {
                 throw new IllegalArgumentException("Body truncated");
             }
 
-            HttpRequest request =
-                    HttpParser.parse(headerPart, body);
+            HttpRequest request = HttpParser.parse(headerPart, body);
 
-            // ---- TEMP LOG ----
-            System.out.println(
-                    request.method + " " + request.path +
-                    " bodyBytes=" + request.body.length
-            );
+            // ---- 5. Routing ----
+            HttpHandler handler =
+                    router.match(request.method, request.path);
 
-            // ---- Response ----
-            String response =
-                    "HTTP/1.1 200 OK\r\n" +
-                    "Content-Length: 2\r\n" +
-                    "Connection: close\r\n" +
-                    "\r\n" +
-                    "OK";
+            HttpResponse response;
+            if (handler == null) {
+                response = new HttpResponse(404, "Not Found", null);
+            } else {
+                response = handler.handle(request);
+            }
 
-            out.write(response.getBytes());
-            out.flush();
+            // ---- 6. Write response ----
+            HttpWriter.write(out, response);
 
         } catch (SocketTimeoutException e) {
-            // slow client
+            System.err.println("Socket read timeout");
+            e.printStackTrace();
         } catch (Exception e) {
-            // malformed or IO error
+            System.err.println("Error handling connection: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             closeQuietly();
         }
