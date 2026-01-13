@@ -1,6 +1,7 @@
 package transport;
 
 import http.*;
+import server.Logger;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -25,6 +26,7 @@ public final class ConnectionHandler implements Runnable {
     @Override
     public void run() {
         OutputStream out = null;
+        long startTime = System.nanoTime();
 
         try {
             socket.setSoTimeout(READ_TIMEOUT_MS);
@@ -99,10 +101,22 @@ public final class ConnectionHandler implements Runnable {
                 response = handler.handle(request);
             }
 
-            // ---- 6. Write response ----
+            // ---- 6. Log request ----
+            long elapsedMs =
+                    (System.nanoTime() - startTime) / 1_000_000;
+
+            Logger.request(
+                    request.method,
+                    request.path,
+                    response.status,
+                    elapsedMs
+            );
+
+            // ---- 7. Write response ----
             HttpWriter.write(out, response);
 
         } catch (BadRequestException e) {
+            Logger.error(400, e.getMessage());
             safeWrite(out, new HttpResponse(400, "Bad Request", null));
 
         } catch (SocketTimeoutException e) {
@@ -110,6 +124,7 @@ public final class ConnectionHandler implements Runnable {
 
         } catch (Exception e) {
             e.printStackTrace();
+            Logger.error(500, "Internal Server Error");
             safeWrite(out, new HttpResponse(500, "Internal Server Error", null));
 
         } finally {
