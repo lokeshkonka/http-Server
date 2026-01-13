@@ -3,6 +3,7 @@ import http.HttpResponse;
 import http.Router;
 import server.ServerConfig;
 import transport.TcpListener;
+import server.item.*;
 
 public final class Main {
 
@@ -11,7 +12,11 @@ public final class Main {
         int port = 8080;
         int workers = Runtime.getRuntime().availableProcessors();
         int queueSize = 100;
-
+        
+        ItemStore store = new ItemStore();
+        ItemService service = new ItemService(store);
+        
+        
         // ---- 1. Build router FIRST ----
         Router router = new Router();
 
@@ -47,5 +52,11 @@ public final class Main {
             listener.shutdown();
             workerPool.shutdown();
         }));
+
+        router.register("POST", "/items", ItemHandlers.create(service));
+        
+        router.register("GET", "/items", ItemHandlers.list(service));
+        router.register("GET", "/items/", ItemHandlers.get(service)); 
+        router.register("DELETE", "/items/", ItemHandlers.delete(service));
     }
 }

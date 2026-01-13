@@ -63,3 +63,46 @@ TCP → ConnectionHandler → HttpParser → Router → HttpHandler → HttpWrit
 
 ### HttpWriter.java
 - ensures the protocol is correct 
+
+### Logger.java
+- Logs the Requests properly
+Format :
+
+[REQ] method=GET path=/ status=200 time_ms=4
+
+---
+
+--- REST API INTEGRATION ---
+
+### server/item/Item.java
+- Model of the item
+
+### server/item/ItemStore.java
+- create()
+- FindAll()
+- findById(id)
+- delete(id)
+
+### server/item/ItemService.java
+- Business Logic
+- validation logics
+
+### server/item/ItemHandler.java
+- handling the http requests by HttpHandler
+- proper listing the items
+- get() ,delete()
+
+## Routes for Items
+- POST /items "item1"
+- GET  /items
+- GET /items/{id}
+- Delete /items/{id}
+
+``` shell
+curl -X POST http://localhost:8080/items -d "Item1"
+curl -X POST http://localhost:8080/items -d "Item2"
+
+curl http://localhost:8080/items/1
+curl http://localhost:8080/items/2
+
+```
