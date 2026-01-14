@@ -106,3 +106,8 @@ curl http://localhost:8080/items/1
 curl http://localhost:8080/items/2
 
 ```
+
+### server/db/Database.java
+- creating the sqlite Library
+- using jdbc for connection and slf4j-simple,sl4j-api for logging purpose
+- aegis.db creates an database
