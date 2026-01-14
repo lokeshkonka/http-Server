@@ -22,7 +22,7 @@ public final class Database {
 
             try (Connection c = DriverManager.getConnection(URL);
                  Statement s = c.createStatement()) {
-
+                s.execute("PRAGMA journal_mode=WAL");
                 s.execute("""
                     CREATE TABLE IF NOT EXISTS items (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -91,7 +91,10 @@ Format :
 - handling the http requests by HttpHandler
 - proper listing the items
 - get() ,delete()
-
+### server/itemItemRepository.java
+- handling the transactions properly with rollbacks
+- WAL (Write Ahead Logging) 
+- 
 ## Routes for Items
 - POST /items "item1"
 - GET  /items
