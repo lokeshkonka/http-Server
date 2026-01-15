@@ -17,10 +17,17 @@ public final class Router {
     }
 
     public HttpHandler match(String method, String path) {
+
+        // 1. Exact match first
         HttpHandler handler = exactRoutes.get(method + " " + path);
         if (handler != null) {
             return handler;
         }
+
+        // 2. Longest prefix match
+        HttpHandler best = null;
+        int bestLen = -1;
+
         for (Map.Entry<String, HttpHandler> e : prefixRoutes.entrySet()) {
             String key = e.getKey();
             int space = key.indexOf(' ');
@@ -28,10 +35,14 @@ public final class Router {
             String prefix = key.substring(space + 1);
 
             if (method.equals(m) && path.startsWith(prefix)) {
-                return e.getValue();
+                int len = prefix.length();
+                if (len > bestLen) {
+                    best = e.getValue();
+                    bestLen = len;
+                }
             }
         }
 
-        return null;
+        return best;
     }
 }

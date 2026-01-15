@@ -8,6 +8,8 @@ import server.item.*;
 import server.db.Database;
 import server.ratelimit.RateLimiter;
 
+import server.staticfiles.StaticFileHandler;
+
 public final class Main {
 
     public static void main(String[] args) {
@@ -22,10 +24,8 @@ public final class Main {
         // ---- Router ----
         Router router = new Router();
 
-        router.register("GET", "/", req ->
-                new HttpResponse(200, "Hello from AegisServer\n", null)
-        );
-
+        router.register("GET", "/static/", StaticFileHandler.assets());
+        router.register("GET", "/", StaticFileHandler.index());
         router.register("POST", "/echo", req ->
                 new HttpResponse(200, new String(req.body), null)
         );
