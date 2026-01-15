@@ -20,7 +20,7 @@ docker build -t aegis-server .
 ### 2. Run the container
 
 ```bash
-docker run -p 8080:8080 -v $(pwd):/app aegis-server
+docker run -p 8080:8080 aegis-server
 ```
 
 This setup:
