@@ -114,3 +114,26 @@ curl http://localhost:8080/items/2
 - creating the sqlite Library
 - using jdbc for connection and slf4j-simple,sl4j-api for logging purpose
 - aegis.db creates an database
+
+### server/ratelimit/rateLimiter.java
+- added rate limiting to the server
+OUTPUT:
+```shell
+command : for i in {1..5}; do curl -i http://localhost:8080/; done
+// Temporarily in Main its 3
+
+TTP/1.1 200 OK
+Content-Length: 23
+Connection: close
+
+Too Many RequestsHTTP/1.1 429 
+Content-Length: 17
+Connection: close
+
+
+Server Console :
+[ERR] status=429 message="Rate limit exceeded for ip=0:0:0:0:0:0:0:1"
+[ERR] status=429 message="Rate limit exceeded for ip=0:0:0:0:0:0:0:1"
+
+
+```

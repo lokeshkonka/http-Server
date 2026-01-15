@@ -2,6 +2,7 @@ package transport;
 
 import http.*;
 import server.Logger;
+import server.ratelimit.RateLimiter;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,10 +18,16 @@ public final class ConnectionHandler implements Runnable {
 
     private final Socket socket;
     private final Router router;
+    private final RateLimiter rateLimiter;
 
-    public ConnectionHandler(Socket socket, Router router) {
+    public ConnectionHandler(
+            Socket socket,
+            Router router,
+            RateLimiter rateLimiter
+    ) {
         this.socket = socket;
         this.router = router;
+        this.rateLimiter = rateLimiter;
     }
 
     @Override
@@ -34,16 +41,22 @@ public final class ConnectionHandler implements Runnable {
             InputStream in = socket.getInputStream();
             out = socket.getOutputStream();
 
-            // ---- 1. Read until headers complete ----
+            // ---- RATE LIMIT (EARLY EXIT) ----
+            String clientIp = socket.getInetAddress().getHostAddress();
+            if (!rateLimiter.allow(clientIp)) {
+                Logger.error(429, "Rate limit exceeded for ip=" + clientIp);
+                safeWrite(out, new HttpResponse(429, "Too Many Requests", null));
+                return;
+            }
+
+            // ---- 1. Read headers ----
             StringBuilder raw = new StringBuilder();
             byte[] buffer = new byte[BUFFER_SIZE];
 
             int read;
             while ((read = in.read(buffer)) != -1) {
                 raw.append(new String(buffer, 0, read, StandardCharsets.ISO_8859_1));
-                if (raw.indexOf("\r\n\r\n") != -1) {
-                    break;
-                }
+                if (raw.indexOf("\r\n\r\n") != -1) break;
             }
 
             int headerEnd = raw.indexOf("\r\n\r\n");
@@ -52,7 +65,6 @@ public final class ConnectionHandler implements Runnable {
             }
 
             int bodyStart = headerEnd + 4;
-
             String headerPart = raw.substring(0, headerEnd);
             byte[] leftover =
                     raw.substring(bodyStart).getBytes(StandardCharsets.ISO_8859_1);
@@ -60,7 +72,7 @@ public final class ConnectionHandler implements Runnable {
             // ---- 2. Parse headers ----
             HttpRequest temp = HttpParser.parse(headerPart, new byte[0]);
 
-            // ---- 3. Determine Content-Length ----
+            // ---- 3. Content-Length ----
             int contentLength = 0;
             Map<String, String> h = temp.headers;
 
@@ -73,7 +85,6 @@ public final class ConnectionHandler implements Runnable {
 
             // ---- 4. Read body ----
             byte[] body = new byte[contentLength];
-
             int copied = Math.min(leftover.length, contentLength);
             System.arraycopy(leftover, 0, body, 0, copied);
 
@@ -94,14 +105,12 @@ public final class ConnectionHandler implements Runnable {
             HttpHandler handler =
                     router.match(request.method, request.path);
 
-            HttpResponse response;
-            if (handler == null) {
-                response = new HttpResponse(404, "Not Found", null);
-            } else {
-                response = handler.handle(request);
-            }
+            HttpResponse response =
+                    (handler == null)
+                            ? new HttpResponse(404, "Not Found", null)
+                            : handler.handle(request);
 
-            // ---- 6. Log request ----
+            // ---- 6. Logging ----
             long elapsedMs =
                     (System.nanoTime() - startTime) / 1_000_000;
 
@@ -119,8 +128,7 @@ public final class ConnectionHandler implements Runnable {
             Logger.error(400, e.getMessage());
             safeWrite(out, new HttpResponse(400, "Bad Request", null));
 
-        } catch (SocketTimeoutException e) {
-            // acceptable silent close
+        } catch (SocketTimeoutException ignored) {
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -137,7 +145,6 @@ public final class ConnectionHandler implements Runnable {
         try {
             HttpWriter.write(out, response);
         } catch (Exception ignored) {
-            // last resort
         }
     }
 

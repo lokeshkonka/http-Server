@@ -2,6 +2,7 @@ package transport;
 
 import concurrency.WorkerPool;
 import http.Router;
+import server.ratelimit.RateLimiter;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,12 +13,19 @@ public final class TcpListener implements Runnable {
     private final int port;
     private final WorkerPool workerPool;
     private final Router router;
+    private final RateLimiter rateLimiter;
     private volatile boolean running = true;
 
-    public TcpListener(int port, WorkerPool workerPool, Router router) {
+    public TcpListener(
+            int port,
+            WorkerPool workerPool,
+            Router router,
+            RateLimiter rateLimiter
+    ) {
         this.port = port;
         this.workerPool = workerPool;
         this.router = router;
+        this.rateLimiter = rateLimiter;
     }
 
     @Override
@@ -27,8 +35,9 @@ public final class TcpListener implements Runnable {
             while (running) {
                 Socket socket = serverSocket.accept();
 
-                boolean accepted =
-                        workerPool.submit(new ConnectionHandler(socket, router));
+                boolean accepted = workerPool.submit(
+                        new ConnectionHandler(socket, router, rateLimiter)
+                );
 
                 if (!accepted) {
                     closeQuietly(socket);

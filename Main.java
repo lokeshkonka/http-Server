@@ -6,6 +6,7 @@ import transport.TcpListener;
 
 import server.item.*;
 import server.db.Database;
+import server.ratelimit.RateLimiter;
 
 public final class Main {
 
@@ -15,20 +16,20 @@ public final class Main {
         int workers = Runtime.getRuntime().availableProcessors();
         int queueSize = 100;
 
-        Database.init(); 
-        
-        // ---- 1. Build router FIRST ----
+        // ---- DB init ----
+        Database.init();
+
+        // ---- Router ----
         Router router = new Router();
 
         router.register("GET", "/", req ->
-                new HttpResponse(200, "Hello from AegisServer \n", null)
+                new HttpResponse(200, "Hello from AegisServer\n", null)
         );
 
         router.register("POST", "/echo", req ->
                 new HttpResponse(200, new String(req.body), null)
         );
 
-        // ---- 2. Build domain services ----
         ItemRepository repo = new ItemRepository();
         ItemService service = new ItemService(repo);
 
@@ -37,23 +38,20 @@ public final class Main {
         router.register("GET", "/items/", ItemHandlers.get(service));
         router.register("DELETE", "/items/", ItemHandlers.delete(service));
 
-        // ---- 3. Build config ----
+        RateLimiter rateLimiter = new RateLimiter(60_000, 60);
         ServerConfig config = new ServerConfig(port, workers, queueSize);
 
-        // ---- 4. Build worker pool ----
         WorkerPool workerPool = new WorkerPool(
                 config.workerCount(),
                 config.queueSize()
         );
-
-        // ---- 5. Build listener ----
         TcpListener listener = new TcpListener(
                 config.port(),
                 workerPool,
-                router
+                router,
+                rateLimiter
         );
 
-        // ---- 6. Start server LAST ----
         Thread serverThread = new Thread(listener, "tcp-listener");
         serverThread.start();
 
