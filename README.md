@@ -101,15 +101,6 @@ Format :
 - GET /items/{id}
 - Delete /items/{id}
 
-``` shell
-curl -X POST http://localhost:8080/items -d "Item1"
-curl -X POST http://localhost:8080/items -d "Item2"
-
-curl http://localhost:8080/items/1
-curl http://localhost:8080/items/2
-
-```
-
 ### server/db/Database.java
 - creating the sqlite Library
 - using jdbc for connection and slf4j-simple,sl4j-api for logging purpose
@@ -137,3 +128,10 @@ Server Console :
 
 
 ```
+### server/staticfiles.java
+- mapping the index.html ,style.css and app.js files 
+
+### static 
+- index.html --> html files
+- style.css --> styles for css
+- app.js --> javascript code
