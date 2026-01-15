@@ -14,7 +14,9 @@ public final class TcpListener implements Runnable {
     private final WorkerPool workerPool;
     private final Router router;
     private final RateLimiter rateLimiter;
+
     private volatile boolean running = true;
+    private ServerSocket serverSocket;
 
     public TcpListener(
             int port,
@@ -30,17 +32,26 @@ public final class TcpListener implements Runnable {
 
     @Override
     public void run() {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        try (ServerSocket ss = new ServerSocket(port)) {
+            this.serverSocket = ss;
 
             while (running) {
-                Socket socket = serverSocket.accept();
+                try {
+                    Socket socket = ss.accept();
 
-                boolean accepted = workerPool.submit(
-                        new ConnectionHandler(socket, router, rateLimiter)
-                );
+                    boolean accepted = workerPool.submit(
+                            new ConnectionHandler(socket, router, rateLimiter)
+                    );
 
-                if (!accepted) {
-                    closeQuietly(socket);
+                    if (!accepted) {
+                        socket.close();
+                    }
+
+                } catch (IOException e) {
+                    if (running) {
+                        throw e;
+                    }
+                    // shutdown path → ignore
                 }
             }
 
@@ -49,14 +60,13 @@ public final class TcpListener implements Runnable {
         }
     }
 
-    private void closeQuietly(Socket socket) {
-        try {
-            socket.close();
-        } catch (IOException ignored) {
-        }
-    }
-
     public void shutdown() {
         running = false;
+        try {
+            if (serverSocket != null) {
+                serverSocket.close(); // unblocks accept()
+            }
+        } catch (IOException ignored) {
+        }
     }
 }

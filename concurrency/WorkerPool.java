@@ -46,10 +46,19 @@ public final class WorkerPool {
         return queue.offer(task); // non-blocking, bounded
     }
 
-    public void shutdown() {
-        running = false;
-        for (Thread worker : workers) {
-            worker.interrupt();
+public void shutdown() {
+    running = false;
+
+    for (Thread t : workers) {
+        t.interrupt();
+    }
+
+    for (Thread t : workers) {
+        try {
+            t.join();
+        } catch (InterruptedException ignored) {
         }
     }
+}
+
 }

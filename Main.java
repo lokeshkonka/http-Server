@@ -56,8 +56,10 @@ public final class Main {
         serverThread.start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("Shutting down server...");
             listener.shutdown();
             workerPool.shutdown();
+            System.out.println("Server shut down. Complete");
         }));
     }
 }
